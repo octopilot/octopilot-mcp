@@ -1,0 +1,1 @@
+"""Octopilot MCP server."""
