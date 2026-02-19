@@ -32,14 +32,33 @@ uv sync
 
 ### Register with your IDE (one command, FastMCP 3 CLI)
 
+Most tools need **no external dependencies** (pure Python).
+`run_op_build` needs `op` — choose one option:
+
+**Option A — Container mode (recommended, no binary needed)**
+
+Requires Docker. The `op` container is pulled automatically.
+
 ```bash
 # Cursor
 uv run fastmcp install cursor src/octopilot_mcp/server.py \
     --name octopilot \
-    --env OP_BINARY=/usr/local/bin/op
+    --env OP_USE_CONTAINER=true
 
 # Claude Desktop
 uv run fastmcp install claude src/octopilot_mcp/server.py \
+    --name octopilot \
+    --env OP_USE_CONTAINER=true
+```
+
+**Option B — Local binary**
+
+Download `op` from the [Releases page](https://github.com/octopilot/octopilot-pipeline-tools/releases)
+and point to it:
+
+```bash
+# Cursor
+uv run fastmcp install cursor src/octopilot_mcp/server.py \
     --name octopilot \
     --env OP_BINARY=/usr/local/bin/op
 ```
@@ -68,15 +87,27 @@ uv run octopilot-mcp
 
 ### Manual JSON config (alternative to `fastmcp install`)
 
+**Container mode (no binary needed):**
 ```json
 {
   "mcpServers": {
     "octopilot": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
-      "env": {
-        "OP_BINARY": "/usr/local/bin/op"
-      }
+      "env": { "OP_USE_CONTAINER": "true" }
+    }
+  }
+}
+```
+
+**Local binary:**
+```json
+{
+  "mcpServers": {
+    "octopilot": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
+      "env": { "OP_BINARY": "/usr/local/bin/op" }
     }
   }
 }

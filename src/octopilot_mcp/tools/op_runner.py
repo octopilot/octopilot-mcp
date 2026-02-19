@@ -1,6 +1,18 @@
 """
 op_runner.py — Run the `op build` CLI binary or container.
 
+Two operating modes, selected by environment variable:
+
+  OP_USE_CONTAINER=true   Pull ghcr.io/octopilot/op and run op build inside it.
+                          Requires Docker but needs NO local op binary.
+                          Recommended for agents and CI environments.
+
+  OP_BINARY=/path/to/op   Use a local op binary.
+                          Falls back to the op binary on PATH if set.
+
+When neither is set the server still works for all tools EXCEPT run_op_build,
+which will raise an informative error explaining the two options.
+
 NOTE: op promote-image is intentionally NOT exposed here.
 Image promotion between environments is operationally sensitive — it must only
 ever run through a GitHub Actions workflow (with audit trail, OIDC credentials,
@@ -16,15 +28,42 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# Default image used in container mode
+_DEFAULT_OP_IMAGE = "ghcr.io/octopilot/op:latest"
+
+
+def _use_container_mode() -> bool:
+    """Return True if OP_USE_CONTAINER env var is set to a truthy value."""
+    return os.environ.get("OP_USE_CONTAINER", "").lower() in ("true", "1", "yes")
+
 
 def _find_op_binary() -> str:
-    """Locate the op binary: OP_BINARY env → PATH → error."""
+    """
+    Locate the op binary.
+
+    Resolution order:
+      1. OP_BINARY environment variable
+      2. op on PATH
+
+    Raises FileNotFoundError with instructions if not found.
+    """
     if env := os.environ.get("OP_BINARY"):
         return env
     found = shutil.which("op")
     if found:
         return found
-    raise FileNotFoundError("op binary not found. Set OP_BINARY env var or ensure 'op' is on PATH.")
+    raise FileNotFoundError(
+        "op binary not found.\n"
+        "\n"
+        "Choose one of:\n"
+        "  A) Set OP_USE_CONTAINER=true in the MCP server env to use the op container\n"
+        "     (requires Docker, no binary needed):\n"
+        '       "env": { "OP_USE_CONTAINER": "true" }\n'
+        "\n"
+        "  B) Download the op binary from https://github.com/octopilot/octopilot-pipeline-tools/releases\n"
+        "     and point to it:\n"
+        '       "env": { "OP_BINARY": "/usr/local/bin/op" }\n'
+    )
 
 
 def run_op_build(
@@ -32,30 +71,37 @@ def run_op_build(
     registry: str,
     platforms: str = "linux/amd64",
     push: bool = False,
-    use_container: bool = False,
-    op_image: str = "ghcr.io/octopilot/op:latest",
+    use_container: bool | None = None,
+    op_image: str = _DEFAULT_OP_IMAGE,
     extra_args: list[str] | None = None,
 ) -> dict:
     """
     Run `op build` in the given workspace.
 
     Args:
-        workspace: Path to the repository root (must contain skaffold.yaml).
-        registry: Target registry/org, e.g. "ghcr.io/my-org".
-        platforms: Comma-separated platform list.
-        push: If True, passes --push to op build.
-        use_container: If True, runs op inside the ghcr.io/octopilot/op container
-                       via Docker (requires Docker to be running).
-        op_image: Container image to use in container mode.
-        extra_args: Additional flags passed to op build.
+        workspace:     Path to the repository root (must contain skaffold.yaml).
+        registry:      Target registry/org, e.g. "ghcr.io/my-org".
+        platforms:     Comma-separated platform list.
+        push:          If True, passes --push to op build.
+        use_container: If True (or OP_USE_CONTAINER=true in env), run op inside
+                       ghcr.io/octopilot/op via Docker — no local binary needed.
+                       If None (default), reads OP_USE_CONTAINER from the environment.
+        op_image:      Container image for container mode.
+        extra_args:    Additional flags passed to op build.
 
     Returns:
         Parsed build_result.json as a dict, or {"status": "ok"} if not produced.
 
     Raises:
-        subprocess.CalledProcessError on non-zero exit.
+        subprocess.CalledProcessError: on non-zero exit.
+        FileNotFoundError: when no binary and container mode is not enabled.
     """
     workspace = Path(workspace).resolve()
+
+    # Resolve container mode: explicit arg overrides env var
+    if use_container is None:
+        use_container = _use_container_mode()
+
     cmd_args = ["build", "--repo", registry, "--platform", platforms]
     if push:
         cmd_args.append("--push")

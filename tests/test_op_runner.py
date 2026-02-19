@@ -28,9 +28,52 @@ def test_find_op_binary_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OP_BINARY", raising=False)
     with (
         patch("shutil.which", return_value=None),
-        pytest.raises(FileNotFoundError, match="op binary not found"),
+        pytest.raises(FileNotFoundError, match="OP_USE_CONTAINER"),
     ):
         _find_op_binary()
+
+
+# ── OP_USE_CONTAINER env var ──────────────────────────────────────────────────
+
+
+def test_use_container_mode_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OP_USE_CONTAINER", "true")
+    from octopilot_mcp.tools.op_runner import _use_container_mode
+
+    assert _use_container_mode() is True
+
+
+def test_use_container_mode_false_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OP_USE_CONTAINER", raising=False)
+    from octopilot_mcp.tools.op_runner import _use_container_mode
+
+    assert _use_container_mode() is False
+
+
+def test_use_container_mode_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    from octopilot_mcp.tools.op_runner import _use_container_mode
+
+    for truthy in ("true", "True", "TRUE", "1", "yes"):
+        monkeypatch.setenv("OP_USE_CONTAINER", truthy)
+        assert _use_container_mode() is True, f"Expected True for {truthy!r}"
+
+    for falsy in ("false", "0", "no", ""):
+        monkeypatch.setenv("OP_USE_CONTAINER", falsy)
+        assert _use_container_mode() is False, f"Expected False for {falsy!r}"
+
+
+def test_run_op_build_respects_op_use_container_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OP_USE_CONTAINER=true causes container mode without use_container=True arg."""
+    (tmp_path / "skaffold.yaml").write_text("apiVersion: skaffold/v4beta1\n")
+    monkeypatch.setenv("OP_USE_CONTAINER", "true")
+
+    with _mock_subprocess(tmp_path) as mock_run:
+        run_op_build(str(tmp_path), "ghcr.io/org")
+
+    cmd = mock_run.call_args[0][0]
+    assert cmd[0] == "docker"  # container mode was selected
 
 
 # ── run_op_build ──────────────────────────────────────────────────────────────
