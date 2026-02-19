@@ -5,55 +5,38 @@ Exposes Octopilot's CI/CD capabilities as callable MCP tools so AI agents
 (Claude, Cursor, GitHub Copilot, etc.) can detect, generate, build, and
 wire up new repositories end-to-end.
 
-Most tools (detect, generate, onboard, actions registry) need NO external
-dependencies — pure Python, works out of the box.
+Requirements
+────────────
+Docker or Colima must be running.  That is the only external dependency.
+Most tools (detect, generate, onboard, actions registry) are pure Python and
+need nothing else. run_op_build pulls ghcr.io/octopilot/op:latest automatically
+and always uses the most recent release — no manual update steps.
 
-run_op_build needs op.  Two options:
-
-  Option A — Container mode (recommended for agents, zero binary install)
-  ──────────────────────────────────────────────────────────────────────
-  Set OP_USE_CONTAINER=true.  Docker must be running.
-  The op container (ghcr.io/octopilot/op:latest) is pulled automatically.
-
+Minimal config
+──────────────
     {
       "mcpServers": {
         "octopilot": {
           "command": "uv",
-          "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
-          "env": { "OP_USE_CONTAINER": "true" }
+          "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"]
         }
       }
     }
 
-  Option B — Local binary
-  ──────────────────────────────────────────────────────────────────────
-  Download op from https://github.com/octopilot/octopilot-pipeline-tools/releases
-  and point to it with OP_BINARY.
-
-    {
-      "mcpServers": {
-        "octopilot": {
-          "command": "uv",
-          "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
-          "env": { "OP_BINARY": "/usr/local/bin/op" }
-        }
-      }
-    }
+Pin to a specific op release (optional, for reproducibility)
+─────────────────────────────────────────────────────────────
+    "env": { "OP_IMAGE": "ghcr.io/octopilot/op:v1.0.0" }
 
 Quick start (FastMCP 3 CLI)
 ───────────────────────────
 # Development with hot-reload
     uv run fastmcp dev src/octopilot_mcp/server.py --reload
 
-# Register with Cursor (container mode — no binary needed)
-    uv run fastmcp install cursor src/octopilot_mcp/server.py \
-        --name octopilot \
-        --env OP_USE_CONTAINER=true
+# Register with Cursor
+    uv run fastmcp install cursor src/octopilot_mcp/server.py --name octopilot
 
 # Register with Claude Desktop
-    uv run fastmcp install claude src/octopilot_mcp/server.py \
-        --name octopilot \
-        --env OP_USE_CONTAINER=true
+    uv run fastmcp install claude src/octopilot_mcp/server.py --name octopilot
 
 # List tools
     uv run fastmcp list src/octopilot_mcp/server.py
@@ -192,29 +175,24 @@ def tool_run_op_build(
     registry: str,
     platforms: str = "linux/amd64",
     push: bool = False,
-    use_container: bool | None = None,
 ) -> dict:
     """
-    Run `op build` in the workspace.
+    Run `op build` in the workspace using the official op container.
 
-    Requires op — either via container (recommended) or a local binary.
-    Container mode is selected automatically when OP_USE_CONTAINER=true is set
-    in the MCP server environment. No local binary is needed in that case.
+    Docker or Colima must be running. The container image is always pulled
+    before each run so the latest op release is used automatically.
+    Set OP_IMAGE in the MCP server env to pin to a specific version.
 
     Args:
-        workspace:     Absolute path to the repository root (must contain skaffold.yaml).
-        registry:      Target registry/org, e.g. "ghcr.io/my-org".
-        platforms:     Comma-separated platform list.
-        push:          If True, push images to the registry after building.
-        use_container: Override container mode for this call.
-                       None (default) reads OP_USE_CONTAINER from the server env.
-                       True forces container mode (Docker required, no binary needed).
-                       False forces local binary mode (OP_BINARY or 'op' on PATH).
+        workspace:  Absolute path to the repository root (must contain skaffold.yaml).
+        registry:   Target registry/org, e.g. "ghcr.io/my-org".
+        platforms:  Comma-separated platform list.
+        push:       If True, push images to the registry after building.
 
     Returns:
         Parsed build_result.json as a dict on success.
     """
-    return run_op_build(workspace, registry, platforms, push, use_container)
+    return run_op_build(workspace, registry, platforms, push)
 
 
 @mcp.tool()

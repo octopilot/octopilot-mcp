@@ -1,17 +1,15 @@
 """
-op_runner.py — Run the `op build` CLI binary or container.
+op_runner.py — Run op build via the official container image.
 
-Two operating modes, selected by environment variable:
+Docker (or Colima) is the only requirement. No local op binary is needed.
 
-  OP_USE_CONTAINER=true   Pull ghcr.io/octopilot/op and run op build inside it.
-                          Requires Docker but needs NO local op binary.
-                          Recommended for agents and CI environments.
+The container is always pulled before each run (docker run --pull always)
+so agents and developers automatically get the latest op release without
+any manual update steps.
 
-  OP_BINARY=/path/to/op   Use a local op binary.
-                          Falls back to the op binary on PATH if set.
-
-When neither is set the server still works for all tools EXCEPT run_op_build,
-which will raise an informative error explaining the two options.
+Pinning to a specific release (e.g. for reproducible CI):
+  Set OP_IMAGE=ghcr.io/octopilot/op:v1.0.0 in the MCP server environment.
+  Default is ghcr.io/octopilot/op:latest.
 
 NOTE: op promote-image is intentionally NOT exposed here.
 Image promotion between environments is operationally sensitive — it must only
@@ -28,42 +26,26 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Default image used in container mode
 _DEFAULT_OP_IMAGE = "ghcr.io/octopilot/op:latest"
 
 
-def _use_container_mode() -> bool:
-    """Return True if OP_USE_CONTAINER env var is set to a truthy value."""
-    return os.environ.get("OP_USE_CONTAINER", "").lower() in ("true", "1", "yes")
+def _get_op_image() -> str:
+    """Return the op container image to use. OP_IMAGE env var overrides the default."""
+    return os.environ.get("OP_IMAGE", _DEFAULT_OP_IMAGE)
 
 
-def _find_op_binary() -> str:
-    """
-    Locate the op binary.
-
-    Resolution order:
-      1. OP_BINARY environment variable
-      2. op on PATH
-
-    Raises FileNotFoundError with instructions if not found.
-    """
-    if env := os.environ.get("OP_BINARY"):
-        return env
-    found = shutil.which("op")
-    if found:
-        return found
-    raise FileNotFoundError(
-        "op binary not found.\n"
-        "\n"
-        "Choose one of:\n"
-        "  A) Set OP_USE_CONTAINER=true in the MCP server env to use the op container\n"
-        "     (requires Docker, no binary needed):\n"
-        '       "env": { "OP_USE_CONTAINER": "true" }\n'
-        "\n"
-        "  B) Download the op binary from https://github.com/octopilot/octopilot-pipeline-tools/releases\n"
-        "     and point to it:\n"
-        '       "env": { "OP_BINARY": "/usr/local/bin/op" }\n'
-    )
+def _assert_docker_available() -> None:
+    """Raise RuntimeError with clear instructions if Docker is not on PATH."""
+    if not shutil.which("docker"):
+        raise RuntimeError(
+            "Docker is not available.\n"
+            "\n"
+            "octopilot-mcp requires Docker (or Colima) to run op commands.\n"
+            "\n"
+            "  macOS:  brew install --cask docker   (Docker Desktop)\n"
+            "          brew install colima && colima start\n"
+            "  Linux:  https://docs.docker.com/engine/install/\n"
+        )
 
 
 def run_op_build(
@@ -71,36 +53,36 @@ def run_op_build(
     registry: str,
     platforms: str = "linux/amd64",
     push: bool = False,
-    use_container: bool | None = None,
-    op_image: str = _DEFAULT_OP_IMAGE,
+    op_image: str | None = None,
     extra_args: list[str] | None = None,
 ) -> dict:
     """
-    Run `op build` in the given workspace.
+    Run `op build` inside the official op container.
+
+    The image is always pulled before running (--pull always) so the latest
+    op release is used automatically. Set OP_IMAGE in the MCP server env to
+    pin to a specific version for reproducibility.
 
     Args:
-        workspace:     Path to the repository root (must contain skaffold.yaml).
-        registry:      Target registry/org, e.g. "ghcr.io/my-org".
-        platforms:     Comma-separated platform list.
-        push:          If True, passes --push to op build.
-        use_container: If True (or OP_USE_CONTAINER=true in env), run op inside
-                       ghcr.io/octopilot/op via Docker — no local binary needed.
-                       If None (default), reads OP_USE_CONTAINER from the environment.
-        op_image:      Container image for container mode.
-        extra_args:    Additional flags passed to op build.
+        workspace:  Path to the repository root (must contain skaffold.yaml).
+        registry:   Target registry/org, e.g. "ghcr.io/my-org".
+        platforms:  Comma-separated platform list.
+        push:       If True, passes --push to op build.
+        op_image:   Override the container image for this call.
+                    Defaults to OP_IMAGE env var → ghcr.io/octopilot/op:latest.
+        extra_args: Additional flags passed to op build.
 
     Returns:
         Parsed build_result.json as a dict, or {"status": "ok"} if not produced.
 
     Raises:
-        subprocess.CalledProcessError: on non-zero exit.
-        FileNotFoundError: when no binary and container mode is not enabled.
+        RuntimeError:                   if Docker is not available.
+        subprocess.CalledProcessError:  on non-zero exit.
     """
-    workspace = Path(workspace).resolve()
+    _assert_docker_available()
 
-    # Resolve container mode: explicit arg overrides env var
-    if use_container is None:
-        use_container = _use_container_mode()
+    workspace = Path(workspace).resolve()
+    image = op_image or _get_op_image()
 
     cmd_args = ["build", "--repo", registry, "--platform", platforms]
     if push:
@@ -108,29 +90,27 @@ def run_op_build(
     if extra_args:
         cmd_args.extend(extra_args)
 
-    if use_container:
-        docker_cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "-v",
-            "/var/run/docker.sock:/var/run/docker.sock",
-            "-v",
-            f"{workspace}:/workspace",
-            "-w",
-            "/workspace",
-            "-e",
-            "GITHUB_ACTIONS=true",
-            "--entrypoint",
-            "/bin/sh",
-            op_image,
-            "-c",
-            f"op {' '.join(cmd_args)}",
-        ]
-        subprocess.run(docker_cmd, check=True, cwd=workspace)
-    else:
-        op_binary = _find_op_binary()
-        subprocess.run([op_binary, *cmd_args], check=True, cwd=workspace)
+    docker_cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--pull",
+        "always",  # always fetch latest; falls back to cache if offline
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "-v",
+        f"{workspace}:/workspace",
+        "-w",
+        "/workspace",
+        "-e",
+        "GITHUB_ACTIONS=true",
+        "--entrypoint",
+        "/bin/sh",
+        image,
+        "-c",
+        f"op {' '.join(cmd_args)}",
+    ]
+    subprocess.run(docker_cmd, check=True, cwd=workspace)
 
     result_path = workspace / "build_result.json"
     if result_path.exists():

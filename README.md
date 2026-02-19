@@ -32,35 +32,16 @@ uv sync
 
 ### Register with your IDE (one command, FastMCP 3 CLI)
 
-Most tools need **no external dependencies** (pure Python).
-`run_op_build` needs `op` — choose one option:
-
-**Option A — Container mode (recommended, no binary needed)**
-
-Requires Docker. The `op` container is pulled automatically.
+Docker or Colima is the only external dependency. Most tools are pure Python;
+`run_op_build` pulls `ghcr.io/octopilot/op:latest` automatically with
+`--pull always`, so you always run the latest release.
 
 ```bash
 # Cursor
-uv run fastmcp install cursor src/octopilot_mcp/server.py \
-    --name octopilot \
-    --env OP_USE_CONTAINER=true
+uv run fastmcp install cursor src/octopilot_mcp/server.py --name octopilot
 
 # Claude Desktop
-uv run fastmcp install claude src/octopilot_mcp/server.py \
-    --name octopilot \
-    --env OP_USE_CONTAINER=true
-```
-
-**Option B — Local binary**
-
-Download `op` from the [Releases page](https://github.com/octopilot/octopilot-pipeline-tools/releases)
-and point to it:
-
-```bash
-# Cursor
-uv run fastmcp install cursor src/octopilot_mcp/server.py \
-    --name octopilot \
-    --env OP_BINARY=/usr/local/bin/op
+uv run fastmcp install claude src/octopilot_mcp/server.py --name octopilot
 ```
 
 ### Development (hot-reload)
@@ -87,27 +68,25 @@ uv run octopilot-mcp
 
 ### Manual JSON config (alternative to `fastmcp install`)
 
-**Container mode (no binary needed):**
 ```json
 {
   "mcpServers": {
     "octopilot": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
-      "env": { "OP_USE_CONTAINER": "true" }
+      "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"]
     }
   }
 }
 ```
 
-**Local binary:**
+Pin to a specific op release (optional):
 ```json
 {
   "mcpServers": {
     "octopilot": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/octopilot-mcp", "octopilot-mcp"],
-      "env": { "OP_BINARY": "/usr/local/bin/op" }
+      "env": { "OP_IMAGE": "ghcr.io/octopilot/op:v1.0.0" }
     }
   }
 }
@@ -117,7 +96,7 @@ uv run octopilot-mcp
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OP_BINARY` | `op` (from PATH) | Path to the `op` CLI binary |
+| `OP_IMAGE` | `ghcr.io/octopilot/op:latest` | Pin to a specific op release for reproducibility |
 
 ## Example agent interaction
 
