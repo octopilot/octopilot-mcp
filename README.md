@@ -103,8 +103,16 @@ Agent: [calls onboard_repository("/path/to/my-api", "ghcr.io/my-org")]
 
 ```bash
 uv sync --all-extras
-uv run pytest
+
+# Run tests
+uv run pytest tests/ -v
+
+# Run with coverage
+uv run pytest tests/ --cov=src/octopilot_mcp --cov-report=term-missing
 ```
+
+Tool module coverage target: **≥95%** (`actions`, `detect`, `generate`, `op_runner`).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Resources
 
