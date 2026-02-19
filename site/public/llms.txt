@@ -1,0 +1,27 @@
+# Octopilot MCP
+
+> Model Context Protocol server for Octopilot CI/CD toolchain.
+> Enables AI agents to detect languages, generate CI workflows, onboard
+> repositories, and run op builds — from any MCP-compatible AI assistant.
+
+## Install
+
+```bash
+curl -fsSL https://mcp.octopilot.app/install.sh | sh
+```
+
+## Tools (local install — requires Docker)
+
+- detect_project_contexts(workspace) — parse skaffold.yaml → pipeline-context JSON
+- generate_skaffold_yaml(artifacts, builder) — generate skaffold.yaml
+- generate_ci_workflow(pipeline_context, registry, platforms) — full ci.yml
+- onboard_repository(workspace, registry) — detect + generate + next steps
+- run_op_build(workspace, registry, platforms, push) — run op build container
+- list_actions() — Octopilot GitHub Actions registry
+- get_action_details(action_id) — full spec for one action
+
+## Resources
+
+- actions.json: https://mcp.octopilot.app/actions.json
+- Full docs:    https://octopilot.app/docs/mcp
+- Source:       https://github.com/octopilot/octopilot-mcp

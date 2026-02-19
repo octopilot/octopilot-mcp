@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Octopilot MCP — AI-native CI/CD toolchain</title>
+    <meta name="description" content="Model Context Protocol server for Octopilot. Wire AI agents into your CI/CD pipeline in one command." />
+    <link rel="canonical" href="https://mcp.octopilot.app/" />
+    <link rel="icon" href="https://octopilot.app/assets/favicon.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Octopilot MCP" />
+    <meta property="og:description" content="Wire AI agents into your CI/CD pipeline in one command." />
+    <meta property="og:url" content="https://mcp.octopilot.app/" />
+    <meta property="og:type" content="website" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:        #080d14;
+        --surface:   #0d1520;
+        --border:    #1e2d40;
+        --accent:    #2d5bff;
+        --accent-lo: rgba(45,91,255,.12);
+        --text:      #e2e8f0;
+        --muted:     #64748b;
+        --green:     #34d399;
+        --mono:      'JetBrains Mono', monospace;
+        --sans:      'Inter', system-ui, sans-serif;
+      }
+
+      html { scroll-behavior: smooth; }
+      body { background: var(--bg); color: var(--text); font-family: var(--sans);
+             line-height: 1.6; min-height: 100dvh; }
+
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      /* ── layout ── */
+      .page { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
+
+      nav { border-bottom: 1px solid var(--border); padding: 1rem 0; }
+      nav .inner { display: flex; justify-content: space-between; align-items: center; }
+      nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); letter-spacing: -.02em; }
+      nav .logo span { color: var(--accent); }
+      nav .links { display: flex; gap: 1.5rem; font-size: .875rem; color: var(--muted); }
+      nav .links a { color: var(--muted); }
+      nav .links a:hover { color: var(--text); text-decoration: none; }
+
+      /* ── hero ── */
+      .hero { padding: 5rem 0 3rem; text-align: center; }
+      .badge { display: inline-flex; align-items: center; gap: .4rem;
+               padding: .3rem .75rem; background: var(--accent-lo);
+               border: 1px solid rgba(45,91,255,.3); border-radius: 999px;
+               font-size: .75rem; font-weight: 600; color: #7ca3ff;
+               text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1.5rem; }
+      h1 { font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 700;
+           letter-spacing: -.03em; line-height: 1.15; margin-bottom: 1rem; }
+      h1 em { font-style: normal; color: #7ca3ff; }
+      .subtitle { font-size: 1.1rem; color: var(--muted); max-width: 520px;
+                  margin: 0 auto 2.5rem; }
+
+      /* ── install box ── */
+      .install-box { background: var(--surface); border: 1px solid var(--border);
+                     border-radius: 12px; overflow: hidden; max-width: 600px;
+                     margin: 0 auto 1rem; }
+      .install-box .header { background: #0a1220; padding: .6rem 1rem;
+                             border-bottom: 1px solid var(--border);
+                             display: flex; align-items: center; gap: .5rem; }
+      .install-box .header span { font-family: var(--mono); font-size: .75rem;
+                                   color: var(--muted); }
+      .install-box .dots { display: flex; gap: 5px; }
+      .install-box .dots i { width: 10px; height: 10px; border-radius: 50%;
+                              background: var(--border); }
+      .cmd { padding: 1.1rem 1.25rem; font-family: var(--mono); font-size: .95rem;
+             color: #93c5fd; display: flex; align-items: center; justify-content: space-between;
+             gap: 1rem; cursor: pointer; transition: background .15s; }
+      .cmd:hover { background: rgba(255,255,255,.03); }
+      .cmd .prompt { color: var(--muted); margin-right: .25rem; }
+      .copy-btn { background: none; border: 1px solid var(--border); border-radius: 6px;
+                  padding: .25rem .6rem; color: var(--muted); font-size: .75rem;
+                  cursor: pointer; transition: all .15s; white-space: nowrap; font-family: var(--sans); }
+      .copy-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lo); }
+      .copy-btn.copied { border-color: var(--green); color: var(--green); }
+      .install-note { font-size: .8rem; color: var(--muted); text-align: center; }
+
+      /* ── version badge ── */
+      #version-badge { display: inline-flex; align-items: center; gap: .4rem;
+                       padding: .2rem .6rem; background: rgba(52,211,153,.08);
+                       border: 1px solid rgba(52,211,153,.2); border-radius: 6px;
+                       font-size: .8rem; color: var(--green); font-family: var(--mono);
+                       margin-bottom: 2rem; }
+
+      /* ── tools grid ── */
+      section { padding: 3rem 0; }
+      section h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: 1.5rem;
+                   color: var(--text); letter-spacing: -.02em; }
+      .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+               gap: .75rem; }
+      .tool { background: var(--surface); border: 1px solid var(--border);
+              border-radius: 10px; padding: 1rem 1.25rem; }
+      .tool-name { font-family: var(--mono); font-size: .85rem; color: #c4b5fd;
+                   margin-bottom: .3rem; }
+      .tool-desc { font-size: .825rem; color: var(--muted); line-height: 1.5; }
+      .tool.local { border-color: rgba(52,211,153,.2); }
+      .tool.local .tag { display: inline-block; font-size: .65rem; font-weight: 600;
+                          padding: .1rem .4rem; border-radius: 4px; background: rgba(52,211,153,.1);
+                          color: var(--green); text-transform: uppercase; margin-bottom: .4rem; }
+
+      /* ── options ── */
+      .options { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      @media (max-width: 560px) { .options { grid-template-columns: 1fr; } }
+      .option { background: var(--surface); border: 1px solid var(--border);
+                border-radius: 10px; padding: 1.25rem; }
+      .option h3 { font-size: .9rem; font-weight: 600; margin-bottom: .75rem;
+                   display: flex; align-items: center; gap: .4rem; }
+      .option code { display: block; font-family: var(--mono); font-size: .78rem;
+                     color: #93c5fd; background: #0a1220; border-radius: 6px;
+                     padding: .5rem .75rem; margin-bottom: .4rem; word-break: break-all; }
+      .option p { font-size: .8rem; color: var(--muted); }
+
+      /* ── footer ── */
+      footer { border-top: 1px solid var(--border); padding: 2rem 0;
+               display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;
+               font-size: .825rem; color: var(--muted); }
+      footer a { color: var(--muted); }
+      footer a:hover { color: var(--text); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="page inner">
+        <div class="logo">mcp.<span>octopilot</span>.app</div>
+        <div class="links">
+          <a href="https://octopilot.app/docs/mcp">Docs</a>
+          <a href="https://octopilot.app">octopilot.app</a>
+          <a href="https://github.com/octopilot/octopilot-mcp">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="page">
+      <section class="hero">
+        <div class="badge">Model Context Protocol</div>
+        <h1>Wire AI agents into your<br /><em>CI/CD pipeline</em></h1>
+        <p class="subtitle">
+          Detect languages, generate Skaffold configs and GitHub Actions workflows,
+          onboard repositories end-to-end — all from your AI assistant.
+        </p>
+
+        <div id="version-badge" style="display:none">
+          <span>↓</span> <span id="version-text">latest</span>
+        </div>
+
+        <div class="install-box">
+          <div class="header">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <span>terminal</span>
+          </div>
+          <div class="cmd" id="cmd-line">
+            <span><span class="prompt">$</span> curl -fsSL https://mcp.octopilot.app/install.sh | sh</span>
+            <button class="copy-btn" id="copy-btn">Copy</button>
+          </div>
+        </div>
+        <p class="install-note">Requires <a href="https://www.docker.com">Docker</a> or <a href="https://github.com/abiosoft/colima">Colima</a> for build commands.</p>
+      </section>
+
+      <section>
+        <h2>Tools</h2>
+        <div class="tools" id="tools-grid">
+          <!-- populated by main.ts -->
+        </div>
+      </section>
+
+      <section>
+        <h2>Other install options</h2>
+        <div class="options">
+          <div class="option">
+            <h3>📦 PyPI</h3>
+            <code>uv tool install octopilot-mcp</code>
+            <code>fastmcp install cursor octopilot-mcp</code>
+            <p>Requires <a href="https://docs.astral.sh/uv/">uv</a>.</p>
+          </div>
+          <div class="option">
+            <h3>🔗 GitHub Release</h3>
+            <code id="release-url">uv tool install octopilot-mcp</code>
+            <p>Direct wheel install from the <a href="https://github.com/octopilot/octopilot-mcp/releases/latest">latest release</a>.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <a href="https://octopilot.app/docs/mcp">Documentation</a>
+      <a href="https://github.com/octopilot/octopilot-mcp">Source</a>
+      <a href="https://octopilot.app">octopilot.app</a>
+      <a href="/install.sh">install.sh</a>
+      <a href="/actions.json">actions.json</a>
+      <a href="/llms.txt">llms.txt</a>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

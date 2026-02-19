@@ -8,20 +8,27 @@ on:
       - "src/**"
       - "pyproject.toml"
       - "install.sh"
-      - "Dockerfile"
-      - "fly.toml"
+      - "site/**"
       - ".github/workflows/deploy-mcp.yml"
   workflow_dispatch:
 
+# Allow one deploy to run at a time; don't cancel mid-flight.
 concurrency:
   group: deploy-mcp
-  cancel-in-progress: false  # never cancel an in-flight deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # GitHub Releases
+  pages: write      # GitHub Pages deploy
+  id-token: write   # PyPI OIDC trusted publishing
 
 jobs:
   # ── 1. Tests must pass before any deploy ────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,17 +39,64 @@ jobs:
       - run: ruff format src/ tests/ --check
       - run: pytest tests/ -q
 
-  # ── 2. Build wheel + publish to PyPI and GitHub Releases (tags only) ────────
+  # ── 2. Build the static site ─────────────────────────────────────────────────
+  build-site:
+    name: Build static site
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci
+        working-directory: site
+
+      # Fetch the latest actions.json from octopilot.app and bundle it
+      # into the static site so /actions.json always reflects the live registry.
+      - name: Fetch actions registry
+        run: |
+          curl -sf --max-time 15 https://octopilot.app/actions.json \
+               -o site/public/actions.json \
+            || echo '{"version":"1","actions":[]}' > site/public/actions.json
+          echo "actions.json: $(wc -c < site/public/actions.json) bytes"
+
+      - name: Build site
+        run: npm run build
+        working-directory: site
+
+      # Upload the built site as a Pages artifact
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  # ── 3. Deploy to GitHub Pages (mcp.octopilot.app) ────────────────────────────
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    needs: build-site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ── 4. Publish to PyPI + GitHub Releases (tags only) ─────────────────────────
   publish:
     name: Publish to PyPI + GitHub Releases
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: pypi
-    permissions:
-      contents: write   # GitHub Releases
-      id-token: write   # PyPI trusted publishing (OIDC)
-
     steps:
       - uses: actions/checkout@v4
 
@@ -54,15 +108,16 @@ jobs:
         run: |
           pip install build --quiet
           python -m build
+          echo "Built packages:"
           ls -lh dist/
 
-      # Publish to PyPI via OIDC trusted publishing — no token needed.
-      # Configure the trusted publisher at https://pypi.org/manage/project/octopilot-mcp/
+      # Publish to PyPI via OIDC trusted publishing — no API token needed.
+      # Set up the trusted publisher at:
+      #   https://pypi.org/manage/project/octopilot-mcp/settings/publishing/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
-      # Also attach the wheel to the GitHub Release so users can install
-      # directly from a URL without PyPI.
+      # Attach the wheel to the GitHub Release for direct URL installs.
       - name: Upload wheel to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -72,60 +127,15 @@ jobs:
             ## Install
 
             ```bash
-            # One-line install (recommended)
-            curl -fsSL https://mcp.octopilot.app/install | sh
+            # One-line installer (recommended)
+            curl -fsSL https://mcp.octopilot.app/install.sh | sh
 
-            # Or install directly from this release
-            uv tool install https://github.com/octopilot/octopilot-mcp/releases/download/${{ github.ref_name }}/octopilot_mcp-${{ github.ref_name }}-py3-none-any.whl
-
-            # Or from PyPI
+            # PyPI
             uv tool install octopilot-mcp
+
+            # Direct from this release
+            uv tool install "https://github.com/octopilot/octopilot-mcp/releases/download/${{ github.ref_name }}/$(ls dist/*.whl | xargs basename)"
             ```
 
-  # ── 3. Deploy to Fly.io ───────────────────────────────────────────────────
-  deploy:
-    name: Deploy to mcp.octopilot.app
-    needs: test
-    # Deploy on every main push AND on version tags
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Fly.io CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # Build remotely on Fly.io infrastructure — no local Docker needed.
-      # The Dockerfile fetches actions.json from octopilot.app at build time.
-      - name: Deploy
-        run: flyctl deploy --remote-only --wait-timeout 120
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Smoke test — /install endpoint
-        run: |
-          echo "Waiting for deployment to stabilise..."
-          sleep 10
-
-          # /install should return the shell script (text/plain, starts with #!/)
-          RESPONSE=$(curl -fsSL --max-time 15 https://mcp.octopilot.app/install || echo "FAILED")
-          if echo "$RESPONSE" | grep -q "#!/usr/bin/env sh"; then
-            echo "✓ /install returns the shell script"
-          else
-            echo "✗ /install smoke test failed"
-            echo "$RESPONSE" | head -5
-            exit 1
-          fi
-
-          # /mcp should return non-5xx (FastMCP returns 405 for GET /mcp)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 15 https://mcp.octopilot.app/mcp || echo "000")
-          if [[ "$STATUS" == 5* || "$STATUS" == "000" ]]; then
-            echo "✗ /mcp smoke test failed — HTTP $STATUS"
-            exit 1
-          fi
-          echo "✓ /mcp returns HTTP $STATUS"
+            ## What's new
+            See [CHANGELOG](https://github.com/octopilot/octopilot-mcp/blob/main/CHANGELOG.md) for details.
