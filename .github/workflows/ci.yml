@@ -3,29 +3,105 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "skaffold.yaml"
+      - "site/**"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test
+  detect:
+    name: Detect Contexts
+    runs-on: ubuntu-latest
+    outputs:
+      pipeline-context: ${{ steps.detect.outputs.pipeline-context }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Contexts
+        id: detect
+        uses: octopilot/actions/detect-contexts@main
+
+  lint:
+    needs: detect
+    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).languages) != '[]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: octopilot/actions/lint@main
         with:
-          python-version: "3.11"
+          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+  test:
+    needs: detect
+    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).matrix) != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.pipeline-context).matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopilot/actions/test@main
+        with:
+          pipeline-context: ${{ toJson(matrix) }}
 
-      - name: Lint
-        run: ruff check src/ tests/
+  # ── Build + deploy the static site to mcp.octopilot.app ───────────────────
+  build-site:
+    name: Build Site
+    needs: [detect, lint, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Format check
-        run: ruff format src/ tests/ --check
+      - uses: octopilot/actions/janitor@main
+        with:
+          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
 
-      - name: Tests with coverage
-        run: pytest tests/ --cov=src/octopilot_mcp --cov-report=term-missing -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci
+        working-directory: site
+
+      - name: Fetch actions registry
+        run: |
+          curl -sf --max-time 15 https://octopilot.app/actions.json \
+               -o site/public/actions.json \
+            || echo '{"version":"1","actions":[]}' > site/public/actions.json
+
+      - name: Build site
+        run: npm run build
+        working-directory: site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    needs: build-site
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

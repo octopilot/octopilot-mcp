@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Trigger a release?"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  detect:
+    name: Detect Contexts
+    runs-on: ubuntu-latest
+    outputs:
+      pipeline-context: ${{ steps.detect.outputs.pipeline-context }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Contexts
+        id: detect
+        uses: octopilot/actions/detect-contexts@main
+
+  lint:
+    needs: detect
+    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).languages) != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopilot/actions/lint@main
+        with:
+          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
+
+  test:
+    needs: detect
+    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).matrix) != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.pipeline-context).matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopilot/actions/test@main
+        with:
+          pipeline-context: ${{ toJson(matrix) }}
+
+  # ── Build Python wheel ─────────────────────────────────────────────────────
+  build-wheel:
+    name: Build Wheel
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel and sdist
+        run: |
+          pip install build --quiet
+          python -m build
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-wheel
+          path: dist/
+          retention-days: 1
+
+  # ── Publish to PyPI ────────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-wheel
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+  # ── GitHub Release with AI-generated notes ─────────────────────────────────
+  github-release:
+    name: Publish GitHub Release
+    needs: [detect, build-wheel, publish-pypi]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-wheel
+          path: dist/
+
+      - name: Find Previous Tag
+        id: prev_tag
+        uses: octopilot/actions/previous-tag@main
+        with:
+          fallback: "v0.0.0"
+
+      - name: Generate Release Notes
+        id: release_notes
+        uses: octopilot/actions/release@main
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          version: ${{ github.ref_name }}
+          since_tag: ${{ steps.prev_tag.outputs.tag }}
+          provider: anthropic
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
+          tag_name: ${{ github.ref_name }}
+          body_path: ${{ steps.release_notes.outputs.body_file }}

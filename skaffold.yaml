@@ -1,0 +1,12 @@
+apiVersion: skaffold/v4beta1
+kind: Config
+metadata:
+  name: octopilot-mcp
+build:
+  artifacts:
+    # Pure Python package — no container to build.
+    # This file exists so octopilot/actions/detect-contexts can identify the
+    # project language (Python) and produce the pipeline-context used by the
+    # lint, test, and janitor actions.
+    - image: octopilot-mcp
+      context: .
