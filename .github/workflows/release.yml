@@ -11,40 +11,28 @@ on:
         default: false
         type: boolean
 
-jobs:
-  detect:
-    name: Detect Contexts
-    runs-on: ubuntu-latest
-    outputs:
-      pipeline-context: ${{ steps.detect.outputs.pipeline-context }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Detect Contexts
-        id: detect
-        uses: octopilot/actions/detect-contexts@main
+# No skaffold.yaml — pipeline-context constructed inline.
+env:
+  PIPELINE_CONTEXT: '{"matrix":[{"name":"octopilot-mcp","context":".","language":"python","version":"3.11"}],"languages":["python"],"versions":{"python":"3.11"}}'
 
+jobs:
   lint:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).languages) != '[]'
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: octopilot/actions/lint@main
         with:
-          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
+          pipeline-context: ${{ env.PIPELINE_CONTEXT }}
 
   test:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).matrix) != '[]'
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include: ${{ fromJson(needs.detect.outputs.pipeline-context).matrix }}
     steps:
       - uses: actions/checkout@v4
       - uses: octopilot/actions/test@main
         with:
-          pipeline-context: ${{ toJson(matrix) }}
+          pipeline-context: ${{ env.PIPELINE_CONTEXT }}
 
   # ── Build Python wheel ─────────────────────────────────────────────────────
   build-wheel:
@@ -88,7 +76,7 @@ jobs:
   # ── GitHub Release with AI-generated notes ─────────────────────────────────
   github-release:
     name: Publish GitHub Release
-    needs: [detect, build-wheel, publish-pypi]
+    needs: [build-wheel, publish-pypi]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release)
     runs-on: ubuntu-latest
     permissions:

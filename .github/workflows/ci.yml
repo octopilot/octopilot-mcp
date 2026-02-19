@@ -7,7 +7,6 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
-      - "skaffold.yaml"
       - "site/**"
       - ".pre-commit-config.yaml"
       - ".github/workflows/ci.yml"
@@ -15,45 +14,34 @@ on:
     branches: [main]
   workflow_dispatch:
 
-jobs:
-  detect:
-    name: Detect Contexts
-    runs-on: ubuntu-latest
-    outputs:
-      pipeline-context: ${{ steps.detect.outputs.pipeline-context }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Detect Contexts
-        id: detect
-        uses: octopilot/actions/detect-contexts@main
+# No skaffold.yaml — this is a pure Python package + static site.
+# pipeline-context is constructed inline: language=python, context=.
+env:
+  PIPELINE_CONTEXT: '{"matrix":[{"name":"octopilot-mcp","context":".","language":"python","version":"3.11"}],"languages":["python"],"versions":{"python":"3.11"}}'
 
+jobs:
   lint:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).languages) != '[]'
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: octopilot/actions/lint@main
         with:
-          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
+          pipeline-context: ${{ env.PIPELINE_CONTEXT }}
 
   test:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).matrix) != '[]'
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include: ${{ fromJson(needs.detect.outputs.pipeline-context).matrix }}
     steps:
       - uses: actions/checkout@v4
       - uses: octopilot/actions/test@main
         with:
-          pipeline-context: ${{ toJson(matrix) }}
+          pipeline-context: ${{ env.PIPELINE_CONTEXT }}
 
   # ── Build + deploy the static site to mcp.octopilot.app ───────────────────
   build-site:
     name: Build Site
-    needs: [detect, lint, test]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,7 +52,7 @@ jobs:
 
       - uses: octopilot/actions/janitor@main
         with:
-          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
+          pipeline-context: ${{ env.PIPELINE_CONTEXT }}
 
       - uses: actions/setup-node@v4
         with:
