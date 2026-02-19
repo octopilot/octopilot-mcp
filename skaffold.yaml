@@ -4,9 +4,14 @@ metadata:
   name: octopilot-mcp
 build:
   artifacts:
-    # Pure Python package — no container to build.
-    # This file exists so octopilot/actions/detect-contexts can identify the
-    # project language (Python) and produce the pipeline-context used by the
-    # lint, test, and janitor actions.
+    # Python package (src/octopilot_mcp).
+    # detect-contexts picks up language=python from pyproject.toml.
     - image: octopilot-mcp
       context: .
+
+    # TypeScript static site (site/) — mcp.octopilot.app.
+    # detect-contexts picks up language=node from site/package.json.
+    # The test action runs 'npm run build' (type-check + vite build) to
+    # ensure the site compiles on every CI run.
+    - image: mcp-octopilot-app-site
+      context: site
