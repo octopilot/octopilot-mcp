@@ -190,3 +190,62 @@ def test_run_op_build_mounts_workspace(workspace: Path) -> None:
     workspace_str = str(workspace.resolve())
     assert any(workspace_str in arg for arg in cmd)
     assert "-w" in cmd
+
+
+# ── Output handling — never swallow, never corrupt MCP protocol ───────────────
+
+
+def test_run_op_build_routes_stdout_to_stderr(workspace: Path) -> None:
+    """
+    stdout must be routed to sys.stderr, not left as None and not captured.
+
+    When the MCP server uses stdio transport (Cursor, Claude Desktop),
+    the process stdout IS the MCP wire protocol.  Subprocess output sent
+    there corrupts the JSON-RPC stream silently.  This test pins the
+    contract: stdout always goes to sys.stderr.
+    """
+    import sys
+
+    with _with_docker(), _mock_run(workspace) as mock_run:
+        run_op_build(str(workspace), "ghcr.io/org")
+
+    kwargs = mock_run.call_args.kwargs
+    assert kwargs.get("stdout") is sys.stderr, (
+        "stdout must be sys.stderr — never None (inherits proto wire) or PIPE (swallows output)"
+    )
+
+
+def test_run_op_build_routes_stderr_to_stderr(workspace: Path) -> None:
+    """stderr must also be routed to sys.stderr so build errors are visible."""
+    import sys
+
+    with _with_docker(), _mock_run(workspace) as mock_run:
+        run_op_build(str(workspace), "ghcr.io/org")
+
+    kwargs = mock_run.call_args.kwargs
+    assert kwargs.get("stderr") is sys.stderr, (
+        "stderr must be sys.stderr — never PIPE (swallows errors) "
+        "or STDOUT (merges with proto wire)"
+    )
+
+
+def test_run_op_build_never_uses_capture_output(workspace: Path) -> None:
+    """capture_output=True must never be used — it silences all build output."""
+    with _with_docker(), _mock_run(workspace) as mock_run:
+        run_op_build(str(workspace), "ghcr.io/org")
+
+    kwargs = mock_run.call_args.kwargs
+    assert not kwargs.get("capture_output", False), (
+        "capture_output must never be True — agents would see no build output"
+    )
+
+
+def test_run_op_build_never_pipes_stdout(workspace: Path) -> None:
+    """stdout=subprocess.PIPE must never be used on a 30-min build."""
+    with _with_docker(), _mock_run(workspace) as mock_run:
+        run_op_build(str(workspace), "ghcr.io/org")
+
+    kwargs = mock_run.call_args.kwargs
+    assert kwargs.get("stdout") is not subprocess.PIPE, (
+        "stdout=PIPE without draining deadlocks on large builds"
+    )

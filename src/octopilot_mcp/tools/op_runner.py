@@ -24,6 +24,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 _DEFAULT_OP_IMAGE = "ghcr.io/octopilot/op:latest"
@@ -110,7 +111,25 @@ def run_op_build(
         "-c",
         f"op {' '.join(cmd_args)}",
     ]
-    subprocess.run(docker_cmd, check=True, cwd=workspace)
+    # Route BOTH stdout and stderr to sys.stderr.
+    #
+    # When the MCP server runs over stdio transport (the default for Cursor /
+    # Claude Desktop), the process's stdout IS the MCP protocol wire. Any bytes
+    # written there by a subprocess corrupt the JSON-RPC stream silently.
+    # Routing to sys.stderr keeps all Docker/op output visible in the IDE's MCP
+    # log pane without ever touching the protocol channel.
+    #
+    # NEVER use:
+    #   capture_output=True  — swallows all output; agents see nothing
+    #   stdout=subprocess.PIPE without draining — deadlocks on large builds
+    #   (no stdout/stderr args) — inherits parent stdout, corrupts MCP protocol
+    subprocess.run(
+        docker_cmd,
+        check=True,
+        cwd=workspace,
+        stdout=sys.stderr,  # Docker build logs → MCP log pane, not protocol wire
+        stderr=sys.stderr,  # same; keeps both streams together and visible
+    )
 
     result_path = workspace / "build_result.json"
     if result_path.exists():
