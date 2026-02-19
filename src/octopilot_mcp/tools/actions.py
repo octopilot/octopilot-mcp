@@ -4,6 +4,7 @@ actions.py — Octopilot actions registry.
 Loads the bundled actions.json so agents can discover and understand all
 available GitHub Actions without hitting the network.
 """
+
 from __future__ import annotations
 
 import json

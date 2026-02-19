@@ -1,10 +1,9 @@
 """Extended tests for language detection — version extraction edge cases."""
+
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-
-import pytest
 
 from octopilot_mcp.tools.detect import (
     _detect_go,
@@ -23,6 +22,7 @@ def w(path: Path, text: str) -> None:
 
 # ── _detect_go ────────────────────────────────────────────────────────────────
 
+
 def test_detect_go_version(tmp_path: Path) -> None:
     w(tmp_path / "go.mod", "module example.com/app\n\ngo 1.25.6\n")
     assert _detect_go(tmp_path) == "1.25.6"
@@ -38,6 +38,7 @@ def test_detect_go_go_mod_without_version(tmp_path: Path) -> None:
 
 
 # ── _detect_rust ──────────────────────────────────────────────────────────────
+
 
 def test_detect_rust_toolchain_toml(tmp_path: Path) -> None:
     w(tmp_path / "rust-toolchain.toml", "[toolchain]\nchannel = 'stable'\n")
@@ -67,6 +68,7 @@ def test_detect_rust_toml_parse_error(tmp_path: Path) -> None:
 
 # ── _detect_node ──────────────────────────────────────────────────────────────
 
+
 def test_detect_node_package_json_engines(tmp_path: Path) -> None:
     w(tmp_path / "package.json", '{"engines": {"node": "20"}}')
     assert _detect_node(tmp_path) == "20"
@@ -93,6 +95,7 @@ def test_detect_node_none(tmp_path: Path) -> None:
 
 # ── _detect_python ────────────────────────────────────────────────────────────
 
+
 def test_detect_python_pyproject_toml(tmp_path: Path) -> None:
     w(tmp_path / "pyproject.toml", "[project]\nrequires-python = '>=3.11'\n")
     assert _detect_python(tmp_path) == ">=3.11"
@@ -115,6 +118,7 @@ def test_detect_python_pyproject_parse_error(tmp_path: Path) -> None:
 
 # ── _detect_java ──────────────────────────────────────────────────────────────
 
+
 def test_detect_java_pom_xml_java_version(tmp_path: Path) -> None:
     w(tmp_path / "pom.xml", "<project><java.version>17</java.version></project>")
     assert _detect_java(tmp_path) == "17"
@@ -136,8 +140,10 @@ def test_detect_java_none(tmp_path: Path) -> None:
 
 # ── detect_project_contexts — multiple language versions ─────────────────────
 
+
 def _make_skaffold(root: Path, *pairs):
     import yaml
+
     config = {
         "apiVersion": "skaffold/v4beta1",
         "kind": "Config",

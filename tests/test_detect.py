@@ -1,10 +1,10 @@
 """Tests for language detection logic."""
-import os
+
 import textwrap
 from pathlib import Path
 
-import yaml
 import pytest
+import yaml
 
 from octopilot_mcp.tools.detect import detect_project_contexts
 
@@ -19,11 +19,7 @@ def make_skaffold(root: Path, *contexts: tuple[str, str]) -> None:
     config = {
         "apiVersion": "skaffold/v4beta1",
         "kind": "Config",
-        "build": {
-            "artifacts": [
-                {"image": img, "context": ctx} for img, ctx in contexts
-            ]
-        },
+        "build": {"artifacts": [{"image": img, "context": ctx} for img, ctx in contexts]},
     }
     (root / "skaffold.yaml").write_text(
         yaml.dump(config, default_flow_style=False, sort_keys=False)

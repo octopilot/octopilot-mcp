@@ -1,4 +1,5 @@
 """Tests for the actions registry."""
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ def clear_registry_cache():
 
 
 # ── _load_registry ────────────────────────────────────────────────────────────
+
 
 def test_load_registry_missing_file(tmp_path: Path) -> None:
     """Returns empty list when actions.json does not exist."""
@@ -61,6 +63,7 @@ def test_load_registry_empty_dict(tmp_path: Path) -> None:
 
 
 # ── list_actions / get_action_details ─────────────────────────────────────────
+
 
 def _patch_registry(tmp_path: Path, entries: list[dict]):
     (tmp_path / "actions.json").write_text(json.dumps(entries))

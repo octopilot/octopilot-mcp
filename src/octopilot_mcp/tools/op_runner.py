@@ -7,6 +7,7 @@ ever run through a GitHub Actions workflow (with audit trail, OIDC credentials,
 and environment protection rules). Exposing it to an AI agent via MCP creates
 unacceptable risk of accidental or unauthorised promotion to production.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,9 +24,7 @@ def _find_op_binary() -> str:
     found = shutil.which("op")
     if found:
         return found
-    raise FileNotFoundError(
-        "op binary not found. Set OP_BINARY env var or ensure 'op' is on PATH."
-    )
+    raise FileNotFoundError("op binary not found. Set OP_BINARY env var or ensure 'op' is on PATH.")
 
 
 def run_op_build(
@@ -65,19 +64,27 @@ def run_op_build(
 
     if use_container:
         docker_cmd = [
-            "docker", "run", "--rm",
-            "-v", "/var/run/docker.sock:/var/run/docker.sock",
-            "-v", f"{workspace}:/workspace",
-            "-w", "/workspace",
-            "-e", "GITHUB_ACTIONS=true",
-            "--entrypoint", "/bin/sh",
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            "/var/run/docker.sock:/var/run/docker.sock",
+            "-v",
+            f"{workspace}:/workspace",
+            "-w",
+            "/workspace",
+            "-e",
+            "GITHUB_ACTIONS=true",
+            "--entrypoint",
+            "/bin/sh",
             op_image,
-            "-c", f"op {' '.join(cmd_args)}",
+            "-c",
+            f"op {' '.join(cmd_args)}",
         ]
         subprocess.run(docker_cmd, check=True, cwd=workspace)
     else:
         op_binary = _find_op_binary()
-        subprocess.run([op_binary] + cmd_args, check=True, cwd=workspace)
+        subprocess.run([op_binary, *cmd_args], check=True, cwd=workspace)
 
     result_path = workspace / "build_result.json"
     if result_path.exists():

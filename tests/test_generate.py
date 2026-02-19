@@ -1,6 +1,4 @@
 """Tests for CI workflow and skaffold.yaml generation."""
-import textwrap
-from pathlib import Path
 
 import yaml
 
@@ -18,10 +16,12 @@ def test_generate_skaffold_yaml_single() -> None:
 
 
 def test_generate_skaffold_yaml_multi() -> None:
-    result = generate_skaffold_yaml([
-        {"name": "frontend", "context": "frontend"},
-        {"name": "api", "context": "api"},
-    ])
+    result = generate_skaffold_yaml(
+        [
+            {"name": "frontend", "context": "frontend"},
+            {"name": "api", "context": "api"},
+        ]
+    )
     doc = yaml.safe_load(result)
     assert len(doc["build"]["artifacts"]) == 2
 

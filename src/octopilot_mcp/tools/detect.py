@@ -4,12 +4,11 @@ detect.py — Language and version detection from skaffold.yaml.
 Ports the logic from octopilot/actions/detect-contexts/detect.py so the MCP
 server can analyse a workspace without requiring the action to be installed.
 """
+
 from __future__ import annotations
 
 import json
-import os
 import re
-import sys
 import tomllib
 from pathlib import Path
 
@@ -145,18 +144,21 @@ def detect_project_contexts(workspace: str | Path) -> dict:
 
         info = _detect_project_info(context_path)
         if info:
-            matrix.append({
-                "name": image,
-                "context": context_rel,
-                "language": info["language"],
-                "version": info["version"],
-            })
+            matrix.append(
+                {
+                    "name": image,
+                    "context": context_rel,
+                    "language": info["language"],
+                    "version": info["version"],
+                }
+            )
 
     languages = sorted({item["language"] for item in matrix if item.get("language")})
     versions = {}
     for lang in languages:
         lang_versions = {
-            item["version"] for item in matrix
+            item["version"]
+            for item in matrix
             if item.get("language") == lang and item.get("version")
         }
         if lang_versions:

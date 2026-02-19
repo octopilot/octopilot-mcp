@@ -1,11 +1,10 @@
 """Extended tests for CI workflow and skaffold generation — onboard_repository."""
+
 from __future__ import annotations
 
-import textwrap
 from pathlib import Path
 
 import yaml
-import pytest
 
 from octopilot_mcp.tools.generate import onboard_repository
 
@@ -21,17 +20,18 @@ def _make_skaffold(root: Path, *pairs):
 
 # ── onboard_repository — skaffold.yaml already exists ───────────────────────
 
+
 def test_onboard_with_existing_skaffold_go(tmp_path: Path) -> None:
     _make_skaffold(tmp_path, ("my-api", "."))
     (tmp_path / "go.mod").write_text("module example.com/app\n\ngo 1.25.6\n")
 
     result = onboard_repository(str(tmp_path), "ghcr.io/my-org")
 
-    assert result["skaffold_yaml"] is None            # not generated (already existed)
+    assert result["skaffold_yaml"] is None  # not generated (already existed)
     assert "skaffold.yaml" not in result["files_to_create"]
     assert ".github/workflows/ci.yml" in result["files_to_create"]
     assert result["pipeline_context"]["languages"] == ["go"]
-    assert result["ci_workflow"]                       # non-empty string
+    assert result["ci_workflow"]  # non-empty string
 
 
 def test_onboard_go_adds_golangci_hint(tmp_path: Path) -> None:
@@ -92,6 +92,7 @@ def test_onboard_ci_already_exists_not_in_files_to_create(tmp_path: Path) -> Non
 
 # ── onboard_repository — skaffold.yaml does NOT exist ─────────────────────
 
+
 def test_onboard_generates_skaffold_from_subdirs(tmp_path: Path) -> None:
     # Two service directories, no skaffold.yaml yet
     api = tmp_path / "api"
@@ -126,11 +127,12 @@ def test_onboard_generates_skaffold_fallback_to_root(tmp_path: Path) -> None:
 def test_onboard_cleans_up_temp_skaffold_on_detect_error(tmp_path: Path) -> None:
     """Temp skaffold.yaml is removed even when detect_project_contexts fails."""
     # Empty directory — detect will produce an empty matrix but not error
-    result = onboard_repository(str(tmp_path), "ghcr.io/my-org")
+    onboard_repository(str(tmp_path), "ghcr.io/my-org")
     assert not (tmp_path / "skaffold.yaml").exists()
 
 
 # ── result structure ──────────────────────────────────────────────────────────
+
 
 def test_onboard_result_keys(tmp_path: Path) -> None:
     _make_skaffold(tmp_path, ("app", "."))

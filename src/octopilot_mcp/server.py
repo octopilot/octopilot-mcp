@@ -34,11 +34,11 @@ Quick start
       }
     }
 """
+
 from __future__ import annotations
 
 import json
 import textwrap
-from pathlib import Path
 
 from fastmcp import FastMCP
 
@@ -70,6 +70,7 @@ mcp = FastMCP(
 )
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def tool_detect_project_contexts(workspace: str) -> dict:
@@ -186,7 +187,6 @@ def tool_run_op_build(
     return run_op_build(workspace, registry, platforms, push, use_container)
 
 
-
 @mcp.tool()
 def tool_list_actions() -> list[dict]:
     """
@@ -217,6 +217,7 @@ def tool_get_action_details(action_id: str) -> dict | None:
 
 # ── Resources ─────────────────────────────────────────────────────────────────
 
+
 @mcp.resource("octopilot://actions")
 def resource_actions() -> str:
     """Full Octopilot actions registry as JSON."""
@@ -236,11 +237,20 @@ def resource_pipeline_context_schema() -> str:
                 "items": {
                     "type": "object",
                     "properties": {
-                        "name":     {"type": "string", "description": "Skaffold artifact image name"},
-                        "context":  {"type": "string", "description": "Build context path relative to repo root"},
-                        "language": {"type": "string", "enum": ["go", "rust", "node", "python", "java"]},
-                        "version":  {"type": "string", "description": "Detected language version"},
-                        "command":  {"type": "string", "description": "Optional override test command"},
+                        "name": {"type": "string", "description": "Skaffold artifact image name"},
+                        "context": {
+                            "type": "string",
+                            "description": "Build context path relative to repo root",
+                        },
+                        "language": {
+                            "type": "string",
+                            "enum": ["go", "rust", "node", "python", "java"],
+                        },
+                        "version": {"type": "string", "description": "Detected language version"},
+                        "command": {
+                            "type": "string",
+                            "description": "Optional override test command",
+                        },
                     },
                     "required": ["name", "context", "language"],
                 },
@@ -378,6 +388,7 @@ def resource_skaffold_patterns() -> str:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     mcp.run()

@@ -1,13 +1,13 @@
 """
 generate.py — CI workflow and skaffold.yaml generation tools.
 """
+
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
 
 import yaml
-
 
 DEFAULT_BUILDER = "ghcr.io/octopilot/builder-jammy-base:latest"
 
@@ -211,8 +211,13 @@ def onboard_repository(
                 # Check if it looks like a service directory
                 has_lang = any(
                     (child / f).exists()
-                    for f in ["go.mod", "Cargo.toml", "package.json",
-                              "requirements.txt", "pyproject.toml"]
+                    for f in [
+                        "go.mod",
+                        "Cargo.toml",
+                        "package.json",
+                        "requirements.txt",
+                        "pyproject.toml",
+                    ]
                 )
                 if has_lang:
                     artifacts.append({"name": child.name, "context": child.name})
@@ -239,7 +244,7 @@ def onboard_repository(
 
     languages = pipeline_context.get("languages", [])
     next_steps = [
-        f"Ensure GITHUB_TOKEN has 'packages: write' and 'attestations: write' permissions.",
+        "Ensure GITHUB_TOKEN has 'packages: write' and 'attestations: write' permissions.",
         f"Log in to {registry} from CI (docker/login-action@v3).",
     ]
     if "go" in languages:
