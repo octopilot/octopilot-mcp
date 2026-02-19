@@ -9,9 +9,3 @@ build:
     - image: octopilot-mcp
       context: .
 
-    # TypeScript static site (site/) — mcp.octopilot.app.
-    # detect-contexts picks up language=node from site/package.json.
-    # The test action runs 'npm run build' (type-check + vite build) to
-    # ensure the site compiles on every CI run.
-    - image: mcp-octopilot-app-site
-      context: site
