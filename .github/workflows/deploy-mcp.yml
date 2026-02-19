@@ -3,9 +3,11 @@ name: Deploy — mcp.octopilot.app
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "src/**"
       - "pyproject.toml"
+      - "install.sh"
       - "Dockerfile"
       - "fly.toml"
       - ".github/workflows/deploy-mcp.yml"
@@ -30,10 +32,62 @@ jobs:
       - run: ruff format src/ tests/ --check
       - run: pytest tests/ -q
 
-  # ── 2. Deploy to Fly.io ───────────────────────────────────────────────────
+  # ── 2. Build wheel + publish to PyPI and GitHub Releases (tags only) ────────
+  publish:
+    name: Publish to PyPI + GitHub Releases
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write   # GitHub Releases
+      id-token: write   # PyPI trusted publishing (OIDC)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel and sdist
+        run: |
+          pip install build --quiet
+          python -m build
+          ls -lh dist/
+
+      # Publish to PyPI via OIDC trusted publishing — no token needed.
+      # Configure the trusted publisher at https://pypi.org/manage/project/octopilot-mcp/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      # Also attach the wheel to the GitHub Release so users can install
+      # directly from a URL without PyPI.
+      - name: Upload wheel to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## Install
+
+            ```bash
+            # One-line install (recommended)
+            curl -fsSL https://mcp.octopilot.app/install | sh
+
+            # Or install directly from this release
+            uv tool install https://github.com/octopilot/octopilot-mcp/releases/download/${{ github.ref_name }}/octopilot_mcp-${{ github.ref_name }}-py3-none-any.whl
+
+            # Or from PyPI
+            uv tool install octopilot-mcp
+            ```
+
+  # ── 3. Deploy to Fly.io ───────────────────────────────────────────────────
   deploy:
     name: Deploy to mcp.octopilot.app
     needs: test
+    # Deploy on every main push AND on version tags
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -45,24 +99,33 @@ jobs:
       - name: Set up Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # Build remotely on Fly.io infrastructure so the runner doesn't need
-      # Docker. The Dockerfile fetches actions.json from octopilot.app at
-      # build time so the deployed server always has the latest registry.
+      # Build remotely on Fly.io infrastructure — no local Docker needed.
+      # The Dockerfile fetches actions.json from octopilot.app at build time.
       - name: Deploy
         run: flyctl deploy --remote-only --wait-timeout 120
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Smoke test — server is reachable
+      - name: Smoke test — /install endpoint
         run: |
           echo "Waiting for deployment to stabilise..."
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 15 https://mcp.octopilot.app/mcp || echo "000")
-          # FastMCP returns 405 for GET /mcp (expects SSE/POST) — that means
-          # the server is alive. Anything other than 5xx / 000 is healthy.
-          if [[ "$STATUS" == 5* || "$STATUS" == "000" ]]; then
-            echo "::error::Smoke test failed — got HTTP $STATUS from /mcp"
+
+          # /install should return the shell script (text/plain, starts with #!/)
+          RESPONSE=$(curl -fsSL --max-time 15 https://mcp.octopilot.app/install || echo "FAILED")
+          if echo "$RESPONSE" | grep -q "#!/usr/bin/env sh"; then
+            echo "✓ /install returns the shell script"
+          else
+            echo "✗ /install smoke test failed"
+            echo "$RESPONSE" | head -5
             exit 1
           fi
-          echo "Smoke test passed — HTTP $STATUS"
+
+          # /mcp should return non-5xx (FastMCP returns 405 for GET /mcp)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 https://mcp.octopilot.app/mcp || echo "000")
+          if [[ "$STATUS" == 5* || "$STATUS" == "000" ]]; then
+            echo "✗ /mcp smoke test failed — HTTP $STATUS"
+            exit 1
+          fi
+          echo "✓ /mcp returns HTTP $STATUS"

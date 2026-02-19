@@ -16,8 +16,9 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.9",
 ]
-# hosted: minimal extras for the public HTTP server on mcp.octopilot.app
-hosted = []  # fastmcp already includes uvicorn; placeholder for future extras
+# hosted: extras for the public HTTP server on mcp.octopilot.app
+# uvicorn is included explicitly so the Dockerfile doesn't need an extra install step
+hosted = ["uvicorn[standard]>=0.30", "starlette>=0.40"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -67,3 +68,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/octopilot_mcp"]
+
+# Include the install script and bundled data files in the wheel.
+# install.sh is served from mcp.octopilot.app/install and bundled so the
+# package is fully self-contained.
+[tool.hatch.build.targets.wheel.shared-data]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = "src"
+
+[tool.hatch.build.force-include]
+"src/octopilot_mcp/data" = "octopilot_mcp/data"

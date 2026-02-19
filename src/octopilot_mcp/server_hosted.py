@@ -162,12 +162,63 @@ def resource_pipeline_context_schema() -> str:
     return json.dumps(schema, indent=2)
 
 
+# ── Install script endpoint ───────────────────────────────────────────────────
+# Serves the install script at GET /install so that:
+#   curl -fsSL https://mcp.octopilot.app/install | sh
+# works without needing the website or GitHub raw URLs.
+
+import importlib.resources  # noqa: E402
+
+
+def _load_install_script() -> str:
+    """Load install.sh bundled with the package, or fall back to a redirect notice."""
+    try:
+        # When installed as a package, install.sh is bundled in the data dir
+        data_path = importlib.resources.files("octopilot_mcp") / "data" / "install.sh"
+        return data_path.read_text(encoding="utf-8")
+    except Exception:
+        # Fallback: redirect to GitHub
+        return (
+            "#!/usr/bin/env sh\n"
+            "# Redirect to canonical install script\n"
+            'exec curl -fsSL "https://raw.githubusercontent.com/octopilot/octopilot-mcp/main/install.sh" | sh\n'
+        )
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
 def main() -> None:
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import PlainTextResponse, RedirectResponse
+    from starlette.routing import Mount, Route
+
     port = int(os.environ.get("PORT", "8000"))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    install_script = _load_install_script()
+
+    async def handle_install(request: Request) -> PlainTextResponse:
+        """Return the install.sh script with the correct content-type for pipe-to-sh."""
+        return PlainTextResponse(install_script, media_type="text/plain")
+
+    async def handle_root(request: Request) -> RedirectResponse:
+        """Redirect bare / to the docs page."""
+        return RedirectResponse(url="https://octopilot.app/docs/mcp", status_code=302)
+
+    # FastMCP 3 exposes the underlying ASGI app so we can wrap it with
+    # custom Starlette routes before handing off to uvicorn.
+    mcp_asgi = mcp.http_app(transport="streamable-http")
+
+    app = Starlette(
+        routes=[
+            Route("/install", handle_install, methods=["GET"]),
+            Route("/", handle_root, methods=["GET"]),
+            Mount("/", app=mcp_asgi),
+        ]
+    )
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
