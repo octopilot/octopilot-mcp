@@ -1,0 +1,68 @@
+name: Deploy — mcp.octopilot.app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "Dockerfile"
+      - "fly.toml"
+      - ".github/workflows/deploy-mcp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-mcp
+  cancel-in-progress: false  # never cancel an in-flight deploy
+
+jobs:
+  # ── 1. Tests must pass before any deploy ────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]" --quiet
+      - run: ruff check src/ tests/
+      - run: ruff format src/ tests/ --check
+      - run: pytest tests/ -q
+
+  # ── 2. Deploy to Fly.io ───────────────────────────────────────────────────
+  deploy:
+    name: Deploy to mcp.octopilot.app
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Build remotely on Fly.io infrastructure so the runner doesn't need
+      # Docker. The Dockerfile fetches actions.json from octopilot.app at
+      # build time so the deployed server always has the latest registry.
+      - name: Deploy
+        run: flyctl deploy --remote-only --wait-timeout 120
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Smoke test — server is reachable
+        run: |
+          echo "Waiting for deployment to stabilise..."
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 https://mcp.octopilot.app/mcp || echo "000")
+          # FastMCP returns 405 for GET /mcp (expects SSE/POST) — that means
+          # the server is alive. Anything other than 5xx / 000 is healthy.
+          if [[ "$STATUS" == 5* || "$STATUS" == "000" ]]; then
+            echo "::error::Smoke test failed — got HTTP $STATUS from /mcp"
+            exit 1
+          fi
+          echo "Smoke test passed — HTTP $STATUS"

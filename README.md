@@ -19,7 +19,34 @@ Model Context Protocol (MCP) server for [Octopilot](https://octopilot.app) — e
 > workflow (with audit trail, OIDC credentials, and environment protection rules).
 > Use `generate_ci_workflow` to produce the workflow that handles promotion safely.
 
-## Installation
+## Option A — Hosted (zero install)
+
+Connect directly to the public server at **https://mcp.octopilot.app** —
+no cloning, no Python, no pip required.
+
+```bash
+# Cursor
+fastmcp install cursor https://mcp.octopilot.app --name octopilot
+
+# Claude Desktop
+fastmcp install claude https://mcp.octopilot.app --name octopilot
+```
+
+**Available hosted tools** (stateless, no local dependencies):
+
+| Tool | Description |
+|------|-------------|
+| `list_actions` | Browse the Octopilot GitHub Actions registry |
+| `get_action_details` | Full spec, inputs, examples, gotchas for one action |
+| `generate_skaffold_yaml` | Generate a `skaffold.yaml` for given artifacts |
+| `generate_ci_workflow` | Full `.github/workflows/ci.yml` for a project |
+
+> **Need `detect_project_contexts`, `onboard_repository`, or `run_op_build`?**
+> Those tools need Docker and local filesystem access — use Option B below.
+
+---
+
+## Option B — Local install (full suite)
 
 ```bash
 # Clone and install

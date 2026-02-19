@@ -16,6 +16,8 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.9",
 ]
+# hosted: minimal extras for the public HTTP server on mcp.octopilot.app
+hosted = []  # fastmcp already includes uvicorn; placeholder for future extras
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -56,7 +58,8 @@ indent-style = "space"
 line-ending = "auto"
 
 [project.scripts]
-octopilot-mcp = "octopilot_mcp.server:main"
+octopilot-mcp        = "octopilot_mcp.server:main"          # local stdio (full suite)
+octopilot-mcp-hosted = "octopilot_mcp.server_hosted:main"   # hosted HTTP (stateless only)
 
 [build-system]
 requires = ["hatchling"]

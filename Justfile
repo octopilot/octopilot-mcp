@@ -57,9 +57,21 @@ test-file *args:
 
 # ── MCP server ────────────────────────────────────────────────────────────────
 
-# Start the MCP server with hot-reload (requires uv + fastmcp CLI)
+# Start the local stdio MCP server with hot-reload
 dev:
     uv run fastmcp dev src/octopilot_mcp/server.py --reload
+
+# Start the hosted HTTP server locally (mirrors mcp.octopilot.app)
+dev-hosted:
+    PORT=8000 uv run octopilot-mcp-hosted
+
+# Build the Docker image for the hosted server
+docker-build:
+    docker build -t octopilot-mcp-hosted .
+
+# Run the hosted server in Docker (mirrors the Fly.io deployment)
+docker-run: docker-build
+    docker run --rm -p 8000:8000 octopilot-mcp-hosted
 
 # List all available MCP tools
 list-tools:
