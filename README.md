@@ -1,5 +1,7 @@
 # octopilot-mcp
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Model Context Protocol (MCP) server for [Octopilot](https://octopilot.app) — enables AI agents to detect, generate, build, and wire up new repositories end-to-end using the Octopilot CI/CD toolchain.
 
 ## What it does

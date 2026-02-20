@@ -1,0 +1,19 @@
+Octopilot MCP Server
+Copyright 2024 Octopilot (https://octopilot.app)
+
+This product includes software developed by Octopilot.
+
+The Octopilot MCP server implements the Model Context Protocol (MCP)
+to expose Octopilot's pipeline toolchain to AI agents. It enables
+agents to detect project languages, generate CI/CD configuration, and
+onboard repositories to the Octopilot pipeline in a single call.
+
+If you use or redistribute this software, this NOTICE file must be
+included in full in any distribution, documentation, or derived work
+(Apache License 2.0, Section 4(d)).
+
+For installation and documentation, visit:
+  https://mcp.octopilot.app
+
+Source code:
+  https://github.com/octopilot/octopilot-mcp
